@@ -39,7 +39,29 @@ class Trackflow{
         index.push({path: filePath, hash: fileHash});
         await fs.writeFile(this.indexPath, JSON.stringify(index));
     }
+
+    async commit(message){
+        const index = JSON.parse(await fs.readFile(this.indexPath, {encoding:'utf-8'}));
+        const parentCommit = await this.getCurrentHead();
+        const commitData = {
+            message,
+            timeStamp: new Date().toISOString(),
+            files: index,
+            parent: parentCommit
+        }
+        const commitHash = this.hashObject(JSON.stringify(commitData));
+        const commitPath = path.join(this.objectsPath, commitHash);
+        await fs.writeFile(commitPath, JSON.stringify(commitData));
+        await fs.writeFile(this.headPath, commitHash);
+        await fs.writeFile(this.indexPath, JSON.stringify([]));
+        console.log(`Successfully created a commit: ${commitHash}`)
+    }
+    getCurrentHead(){
+        try {
+            return fs.readFile(this.headPath, {encoding:'utf-8'});
+        } catch (error) {
+            return null;
+        }
+    }
 }
 
-const track = new Trackflow();
-track.add('sample.txt');
