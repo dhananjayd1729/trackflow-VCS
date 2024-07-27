@@ -1,6 +1,8 @@
 import path from "path";
 import fs from "fs/promises"
 import crypto from "crypto"
+import { diffLines } from "diff";
+import chalk from "chalk";
 class Trackflow{
     
     constructor(repoPath = "."){
@@ -63,5 +65,81 @@ class Trackflow{
             return null;
         }
     }
+    async log(){
+        let currentCommitHash = await this.getCurrentHead();
+        while(currentCommitHash){
+            const commitData = JSON.parse(await fs.readFile(path.join(this.objectsPath, currentCommitHash), {encoding:'utf-8'}));
+            console.log("--------------------------------------------\n")
+            console.log(`Commit: ${currentCommitHash}\nDate:${commitData.timeStamp}\n\n${commitData.message}\n\n`);
+            currentCommitHash = commitData.parent;
+        }
+    }
+    async showCommitDiff(commitHash){
+        //showing diff b/n currentHead and parent
+        const commitData = JSON.parse(await this.getCommitData(commitHash));
+        if(!commitData){
+            console.log("Commit not found.");
+            return;
+        }
+        console.log("Changes in the last commit are: ");
+        for(const file of commitData.files){
+            console.log(`File: ${file.path}`);
+            const fileContent = await this.getFileContent(file.hash);
+            // console.log(fileContent);
+            if(commitData.parent){
+                const parentCommitData = JSON.parse(await this.getCommitData(commitData.parent));
+                const getParentFileContent = await this.getParentFileContent(parentCommitData, file.path);
+
+                if(getParentFileContent !== undefined){
+                    console.log("\nDiff:");
+                    const diff = diffLines(getParentFileContent, fileContent);
+
+                    diff.forEach(part => {
+                        if(part.added){
+                            process.stdout.write(chalk.green(`++ ${part.value}`));
+                        }else if(part.removed){
+                            process.stdout.write(chalk.red(`-- ${part.value}`));
+                        }else{
+                            process.stdout.write(chalk.grey(part.value));
+                        }
+                    })
+                    console.log();
+                }else{
+                    console.log("New file in this commit");
+                }
+            }else{
+                console.log("First commit");
+            }
+        }
+    }
+    async getCommitData(commitHash){
+        const commitPath = path.join(this.objectsPath, commitHash);
+        try {
+            return await fs.readFile(commitPath, {encoding:'utf-8'});
+        } catch (error) {
+            console.log("Failed to read the commit data", error);
+            return null;
+        }
+    }
+    async getFileContent(fileHash){
+        const objectPath = path.join(this.objectsPath, fileHash);
+        return await fs.readFile(objectPath, {encoding:'utf-8'});
+    }
+    async getParentFileContent(parentCommitData, filePath){
+        const parentFile = parentCommitData.files.find(file => file.path === filePath);
+
+        if(parentFile){
+            //file content from the parent commit
+            return await this.getFileContent(parentFile.hash);
+        }
+    }
 }
+
+(async()=>{
+    const track = new Trackflow();
+    // await track.add('sample.txt');
+    // await track.commit('fourth commit');
+    // await track.log();
+    await track.showCommitDiff('ffa774cc8476fca28b40d50c0f865fb442fa2e30');
+})();
 
