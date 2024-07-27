@@ -1,8 +1,13 @@
+#!/usr/bin/env node
+
 import path from "path";
 import fs from "fs/promises"
 import crypto from "crypto"
 import { diffLines } from "diff";
 import chalk from "chalk";
+import { Command } from "commander";
+
+const program = new Command();
 class Trackflow{
     
     constructor(repoPath = "."){
@@ -85,7 +90,7 @@ class Trackflow{
         for(const file of commitData.files){
             console.log(`File: ${file.path}`);
             const fileContent = await this.getFileContent(file.hash);
-            // console.log(fileContent);
+            console.log(fileContent);
             if(commitData.parent){
                 const parentCommitData = JSON.parse(await this.getCommitData(commitData.parent));
                 const getParentFileContent = await this.getParentFileContent(parentCommitData, file.path);
@@ -93,7 +98,6 @@ class Trackflow{
                 if(getParentFileContent !== undefined){
                     console.log("\nDiff:");
                     const diff = diffLines(getParentFileContent, fileContent);
-
                     diff.forEach(part => {
                         if(part.added){
                             process.stdout.write(chalk.green(`++ ${part.value}`));
@@ -135,11 +139,28 @@ class Trackflow{
     }
 }
 
-(async()=>{
+program.command('init').action((async () =>{
     const track = new Trackflow();
-    // await track.add('sample.txt');
-    // await track.commit('fourth commit');
-    // await track.log();
-    await track.showCommitDiff('ffa774cc8476fca28b40d50c0f865fb442fa2e30');
-})();
+}));
 
+program.command('add <file>').action((async (file) =>{
+    const track = new Trackflow();
+    await track.add(file);
+}));
+
+program.command('commit <message>').action((async (message) =>{
+    const track = new Trackflow();
+    await track.commit(message);
+}));
+
+program.command('log').action((async () =>{
+    const track = new Trackflow();
+    await track.log();
+}));
+
+program.command('show <commitHash>').action((async (commitHash) =>{
+    const track = new Trackflow();
+    await track.showCommitDiff(commitHash);
+}));
+
+program.parse(process.argv);
